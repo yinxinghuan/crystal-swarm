@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta name="game-uuid" content="60311370-edc4-45ea-bae5-6ee831a0b694" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/gif" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+    <title>Crystal Swarm</title>
+  </head>
+  <body>
+    <div id="app" class="cs-shell">
+      <div id="stage" class="cs-stage" aria-hidden="true"></div>
+      <div class="cs-vignette" aria-hidden="true"></div>
+
+      <header id="hud" class="cs-hud">
+        <div>
+          <span data-i18n="time">Time</span>
+          <strong id="timeLeft">45</strong>
+        </div>
+        <div>
+          <span data-i18n="score">Score</span>
+          <strong id="scoreValue">0</strong>
+        </div>
+      </header>
+
+      <main id="startScreen" class="cs-screen cs-screen--start">
+        <section class="cs-card cs-card--start">
+          <p class="cs-kicker" data-i18n="kicker">Touch gravity into light</p>
+          <h1 data-i18n="title">Crystal Swarm</h1>
+          <p class="cs-copy" data-i18n="startCopy">Pull the glass swarm into all three rings before the prism fades.</p>
+          <button id="startButton" class="cs-button cs-button--primary" type="button" data-i18n="start">Begin</button>
+        </section>
+      </main>
+
+      <main id="gameScreen" class="cs-screen cs-screen--game">
+        <div id="comboBadge" class="cs-combo" aria-hidden="true"></div>
+        <div id="hint" class="cs-hint" data-i18n="hint">Hold to gather</div>
+      </main>
+
+      <main id="endScreen" class="cs-screen cs-screen--end">
+        <section class="cs-card cs-card--end">
+          <p id="resultLabel" class="cs-kicker">Prism complete</p>
+          <h2 id="finalScore">0</h2>
+          <div class="cs-stats">
+            <div><span data-i18n="best">Best</span><strong id="bestScore">0</strong></div>
+            <div><span data-i18n="rings">Rings</span><strong id="ringCount">0/3</strong></div>
+            <div><span data-i18n="combo">Combo</span><strong id="maxCombo">1</strong></div>
+          </div>
+          <div class="cs-actions">
+            <button id="againButton" class="cs-button cs-button--primary" type="button" data-i18n="again">Again</button>
+            <button id="homeButton" class="cs-button" type="button" data-i18n="home">Home</button>
+          </div>
+        </section>
+      </main>
+
+      <img class="cs-watermark" src="./img/aigram.svg" alt="" draggable="false" />
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
