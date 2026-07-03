@@ -17,7 +17,7 @@
 - 光源为跟随手指目标的 `PointLight(#ffc0c0)` 和近距离白色 `PointLight(#ffffff)`；松手时主光强约 8.5、距离约 560，按住时主光强约 17、距离约 760，近距离白光强度约 10。
 - 手指/光标目标点必须有可见光核：中心 additive sprite 约 18 world units，外层 halo sprite 约 58 world units，按住时整体放大到 1.22 倍，并以 0.006/ms 的正弦节奏轻微脉动。
 - HUD 顶部显示晶体数量 2000 和当前色盘序号，字号分别为 12px 与 30px；底部提示字号 11px、字距 0.18em，不遮挡中央群体。
-- 素材清单：`public/img/aigram.svg` 作为右下角 52px 水印；其余视觉由 Three.js 几何、材质、灯光和后处理生成。
+- 素材清单：`public/img/aigram.svg` 使用新版 AlterU 竖向 mark，作为右下角 28px 水印；其余视觉由 Three.js 几何、材质、灯光和后处理生成。
 
 ## 3. Game Mechanics
 

@@ -283,8 +283,8 @@ h2 {
   right: 14px;
   bottom: calc(14px + env(safe-area-inset-bottom));
   z-index: 24;
-  width: 52px;
-  opacity: 0.36;
+  width: 28px;
+  opacity: 0.72;
   pointer-events: none;
 }
 
