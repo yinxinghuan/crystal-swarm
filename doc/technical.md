@@ -2,43 +2,45 @@
 
 ## 1. 技术栈
 
-《Crystal Swarm》使用 Vite 5 构建，核心代码为原生 JavaScript，3D 渲染使用 Three.js 0.180。项目通过 `npm run build` 输出 `dist/`，`vite.config.js` 设置 `base: './'`，可以部署到任意子路径。
+《Crystal Swarm》当前版本用于复刻 TroisJS Physics Demo 1 的技术效果。项目使用 Vite 5 构建，核心代码为原生 JavaScript，3D 渲染使用 Three.js 0.180，物理使用 `cannon-es`。
 
-渲染方式为全屏 WebGL：900 个水晶使用 `THREE.InstancedMesh` 批量绘制，光晕使用自定义 `ShaderMaterial` 点精灵，目标环和引力核心使用 Three.js 几何体生成。UI、HUD、开始页和结算页使用普通 DOM + CSS 覆盖在 canvas 上。
+渲染方式为全屏 WebGL：500 个球体使用 `THREE.InstancedMesh` 批量绘制，Cannon Sphere body 负责重力、碰撞和反弹，6 条静态挡板使用 Three Box + Cannon Box 对齐。相机控制使用 Three.js `OrbitControls`，手机端通过单指拖动旋转视角。
 
 ## 2. 目录结构
 
 - `index.html`：页面根结构，包含开始页、游戏层、HUD、结算页和右下角 Aigram 水印。
-- `src/main.js`：游戏主入口，负责 i18n、Three.js 场景、游戏状态、输入、音频、主循环和结算。
-- `src/styles.css`：全屏布局、HUD、卡片、按钮、提示、combo 动效和响应式样式。
-- `public/poster.svg`：游戏封面图。
+- `src/main.js`：游戏主入口，负责 i18n、Three.js 场景、Cannon 世界、实例球体、手机输入、音频、主循环和 HUD。
+- `src/styles.css`：浅色物理 demo 风格布局、HUD、卡片、按钮、提示和响应式样式。
+- `public/poster.png`：游戏封面图，`meta.json` 的 `cover_url` 指向 `/poster.png`。
 - `public/img/aigram.svg`：右下角平台水印，构建时复制到 `dist/img/aigram.svg`。
 - `doc/requirements.md`：玩法与视觉需求文档。
 - `doc/technical.md`：当前技术文档。
-- `meta.json`：平台展示元信息，标题为 `Crystal Swarm`，封面为 `/poster.svg`。
+- `meta.json`：平台展示元信息。
 
 ## 3. 核心模块
 
-状态管理集中在 `src/main.js`，通过 `phase` 表示开始、游戏中、结束三态；`score`、`best`、`roundStart`、`litCount` 和 `maxCombo` 管理分数、最高分、倒计时、已点亮能量环和连击。最高分写入 `localStorage` 的 `crystal_swarm_best`。
+状态管理集中在 `src/main.js`，`phase` 只区分 `start`、`playing`、`end`；当前技术验证版本主要使用开始态和物理演示态。`paletteIndex`、`dropBursts` 和 HUD 显示当前调色盘与喷球次数。
 
-主循环由 `requestAnimationFrame(render)` 驱动。每帧执行 `updateGame()` 更新倒计时，`updateSwarm()` 更新 900 个水晶的位置、速度和实例矩阵，`updateRings()` 统计目标环半径 0.62 内的水晶数量并计算充能。只有分数、倒计时、combo、屏幕状态等低频 UI 值写 DOM，高频物理量保留在 Three.js 对象和数组中。
+Three.js 场景包括浅色背景、PerspectiveCamera、OrbitControls、环境光、两盏 SpotLight、接收阴影的 15 × 15 平面、6 条倾斜挡板，以及 500 个 instanced sphere。Renderer 开启 shadowMap，像素比限制为 `Math.min(devicePixelRatio, 2)`。
 
-屏幕适配在 `resize()` 中处理，renderer 使用舞台元素的 clientWidth/clientHeight，像素比限制为 `Math.min(devicePixelRatio, 2)`。相机 FOV 为 45，z 位置为 5.4，竖屏和桌面窗口都以同一 3D 世界坐标渲染。
+Cannon 世界重力为 `(0, -9.82, 0)`，固定步长 1/60s，最多补 3 步。每个球体对应一个 Cannon Sphere body，质量为 `scale * 0.01`，线性阻尼 0.08，角阻尼 0.15。每帧 `world.step()` 后通过 `syncMeshes()` 把 body 的 position/quaternion 写回 InstancedMesh matrix。
 
-输入模块使用 `pointerdown`、`pointermove`、`pointerup` 和 Space 键。指针通过 `Raycaster` 投影到 z=0 的平面，得到 `targetGravityPoint`；按住时 `attraction` 接近 1，松开后逐帧衰减。`pointermove` 只更新向量，不创建音频节点或新对象。
+挡板模块由 `addRamp()` 生成：Three BoxGeometry 尺寸为 3 × 0.05 × 0.2，Cannon Box halfExtents 为 1.5 × 0.025 × 0.1。6 条挡板的 x/y/rotation 和原 TroisJS Demo1 保持一致。
 
-碰撞与得分不是刚体物理，而是半径统计：每个目标环统计范围内水晶数量，数量达到 58 并持续累计到 1.05 秒后点亮。密度得分每 250ms 计算一次，避免每帧改 DOM。
+输入模块使用 pointer 事件：单指拖动由 OrbitControls 处理旋转；pointerup 时如果移动距离小于 10px 且按压时间小于 420ms，则调用 `spray(18)` 重置一批球体到上方；长按超过 420ms 后每 120ms 调用 `spray(10)` 连续喷球。键盘 Space 喷球，键盘 C 切换调色盘。
 
-音频使用 Web Audio API 即时合成。`tone()` 创建 oscillator 和 gain，开始、按下、充能完成、全完成、失败、按钮点击分别映射到不同波形、频率和时长。音频上下文在首次用户手势后恢复，满足浏览器自动播放限制。
+音频使用 Web Audio API 即时合成。`tone()` 创建 oscillator 和 gain，开始、喷球、长按 tick、换色、按钮点击分别映射到不同波形、频率和时长。音频上下文在首次用户手势后恢复，满足浏览器自动播放限制。
 
 多语言为轻量自定义表，`detectLocale()` 优先读取 `localStorage.game_locale`，否则根据 `navigator.language` 判断 `zh` 或 `en`。`data-i18n` 元素在启动时统一替换文本。
 
 ## 4. 扩展点
 
-改玩法主要调整 `src/main.js` 顶部的 `ROUND_MS`、`COUNT`、`TARGETS`，以及 `updateRings()` 中的半径 0.62、数量阈值 58、充能时长 1.05 秒和得分规则。
+改物理效果主要调整 `src/main.js` 顶部的 `COUNT`、`world.gravity`、Cannon contact material、Sphere body damping、`resetBody()` 的重置高度和速度。
 
-换视觉素材主要改 `src/main.js` 中的几何体、材质、灯光、`palette` 和 shader 参数；如果需要贴图资源，放入 `src/` 后用 import 引入，或放入 `public/` 后使用相对路径引用。
+改原版 demo 结构主要调整 `addRamp()` 中的挡板数量、尺寸、位置、旋转角度和材质。
 
-调 UI 数值主要改 `src/styles.css`，包括 `.cs-hud`、`.cs-card`、`.cs-hint`、`.cs-combo` 和响应式媒体查询。按钮文案和可见文本改 `messages.zh` / `messages.en`，不要在 HTML 中硬编码新文本。
+改手机操作主要调整 `onPointerDown()`、`onPointerUp()` 中的点击距离阈值 10px、长按阈值 420ms、连续喷球间隔 120ms，以及 `spray()` 的球体数量。
 
-加后端或平台能力时，可以在 `startGame()`、`endGame()`、`addScore()` 附近接入统计、排行榜或存档。当前版本没有远程 API；如需平台持久化，应先引入项目 runtime，并保持本地状态镜像作为读写源，避免直接用一次性加载的云端数据做 read-modify-write。
+换视觉风格主要改 `src/styles.css`、Three 灯光、`paletteSets`、`MeshToonMaterial`/`MeshPhongMaterial` 和 renderer 背景色。当前版本刻意接近 TroisJS Physics Demo 1 的白底、彩球、阴影、挡板风格。
+
+加正式玩法时，可以在 `spray()`、`syncMeshes()` 或 Cannon collision event 上接入计分、目标、失败条件和排行榜；当前版本先不做规则，只验证原版物理技术栈效果。
