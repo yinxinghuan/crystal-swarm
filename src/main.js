@@ -1,51 +1,56 @@
 import './styles.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import * as CANNON from 'cannon-es';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
-const COUNT = 500;
+const COUNT = 2000;
 const BEST_KEY = 'crystal_swarm_best';
-const paletteSets = [
-  ['#69d2e7', '#a7dbd8', '#e0e4cc', '#f38630', '#fa6900'],
-  ['#fe4365', '#fc9d9a', '#f9cdad', '#c8c8a9', '#83af9b'],
-  ['#ecd078', '#d95b43', '#c02942', '#542437', '#53777a'],
-  ['#556270', '#4ecdc4', '#c7f464', '#ff6b6b', '#c44d58'],
-  ['#774f38', '#e08e79', '#f1d4af', '#ece5ce', '#c5e0dc'],
-  ['#e8ddcb', '#cdb380', '#036564', '#033649', '#031634'],
+const colorPairs = [
+  ['#dd3e1b', '#0b509c'],
+  ['#ff5aa5', '#40e0ff'],
+  ['#fff4a8', '#7b4dff'],
+  ['#ff7a18', '#2af598'],
+  ['#f953c6', '#22c1c3'],
+  ['#fdfbfb', '#eb3b5a'],
 ];
 
 const messages = {
   en: {
-    time: 'Balls',
+    time: 'Bodies',
     score: 'Palette',
-    kicker: 'Cannon physics demo',
+    kicker: 'Subsurface swarm',
     title: 'Crystal Swarm',
-    startCopy: 'Drag to orbit. Tap or hold to drop bouncing color spheres.',
+    startCopy: 'Hold and drag to pull a glowing dodecahedron field through the light.',
     start: 'Begin',
-    hint: 'Drag orbit · Tap drop · Hold stream',
+    hint: 'Hold to attract · Drag to steer · Tap color',
     best: 'Best',
-    rings: 'Drops',
+    rings: 'Bodies',
     combo: 'Palette',
     again: 'Again',
     home: 'Home',
-    complete: 'Physics ready',
-    incomplete: 'Physics ready',
+    complete: 'Material study',
+    incomplete: 'Material study',
   },
   zh: {
-    time: '球体',
+    time: '晶体',
     score: '色盘',
-    kicker: 'Cannon 物理演示',
+    kicker: '次表面散射群游',
     title: '水晶群',
-    startCopy: '拖动旋转视角，轻点或长按让彩色小球滚落反弹。',
+    startCopy: '按住并拖动，让发光十二面体群穿过光源。',
     start: '开始',
-    hint: '拖动旋转 · 轻点落球 · 长按连发',
+    hint: '按住吸引 · 拖动引导 · 轻点换色',
     best: '最高',
-    rings: '落球',
+    rings: '晶体',
     combo: '色盘',
     again: '再来一次',
     home: '返回首页',
-    complete: '物理就绪',
-    incomplete: '物理就绪',
+    complete: '材质试验',
+    incomplete: '材质试验',
   },
 };
 
@@ -82,101 +87,101 @@ const hint = document.getElementById('hint');
 
 let phase = 'start';
 let paletteIndex = 0;
-let dropBursts = 0;
-let longPressTimer = 0;
-let streamTimer = 0;
-let pointerDownAt = 0;
-let pointerStartX = 0;
-let pointerStartY = 0;
+let pointerActive = false;
+let lastTap = 0;
 let audioCtx = null;
 
-const tempMatrix = new THREE.Matrix4();
-const tempObject = new THREE.Object3D();
-const tempColor = new THREE.Color();
+const target = new THREE.Vector3(0, 0, 0);
+const targetGoal = new THREE.Vector3(0, 0, 0);
+const pointer = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+const dummy = new THREE.Object3D();
+const temp = new THREE.Vector3();
+const color = new THREE.Color();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(stage.clientWidth, stage.clientHeight);
-renderer.setClearColor(0xf7f7f3, 1);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x060414, 1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 stage.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf7f7f3);
+scene.background = new THREE.Color(0x060414);
+scene.fog = new THREE.FogExp2(0x060414, 0.0026);
 
-const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 100);
-camera.position.set(0, 0, 7);
+const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 1000);
+camera.position.set(0, 0, 220);
 
-const controls = new OrbitControls(camera, renderer.domElement);
+const controls = new OrbitControls(camera, gameScreen);
 controls.enableDamping = true;
-controls.dampingFactor = 0.08;
+controls.dampingFactor = 0.05;
 controls.enablePan = false;
-controls.minDistance = 4.2;
-controls.maxDistance = 10;
-controls.minPolarAngle = Math.PI * 0.18;
-controls.maxPolarAngle = Math.PI * 0.82;
-controls.target.set(0, 0, 0);
+controls.minDistance = 110;
+controls.maxDistance = 310;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.22;
 
-scene.add(new THREE.AmbientLight(0xaaaaaa, 1));
+const light = new THREE.PointLight(0xffc0c0, 9, 620, 1.05);
+light.position.copy(target);
+scene.add(light);
+scene.add(new THREE.AmbientLight(0xffffff, 1.05));
+const blueFill = new THREE.DirectionalLight(0x7cf6ff, 1.4);
+blueFill.position.set(-1.6, 0.8, 2.2);
+scene.add(blueFill);
+const pinkFill = new THREE.DirectionalLight(0xff74d4, 1.2);
+pinkFill.position.set(1.4, -1.1, 2.4);
+scene.add(pinkFill);
 
-const spotA = new THREE.SpotLight(0xaaaaaa, 0.5, 18, Math.PI / 3, 0.5, 1);
-spotA.position.set(0, 1, 2);
-spotA.castShadow = true;
-spotA.shadow.mapSize.set(1024, 1024);
-scene.add(spotA);
-
-const spotB = new THREE.SpotLight(0xff0000, 0.5, 18, Math.PI / 3, 0.5, 1);
-spotB.position.set(0, -1, 2);
-spotB.castShadow = true;
-spotB.shadow.mapSize.set(1024, 1024);
-scene.add(spotB);
-
-const backdrop = new THREE.Mesh(
-  new THREE.PlaneGeometry(15, 15),
-  new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 12 }),
-);
-backdrop.position.z = -0.1;
-backdrop.receiveShadow = true;
-scene.add(backdrop);
-
-const world = new CANNON.World({
-  gravity: new CANNON.Vec3(0, -9.82, 0),
+const geometry = new THREE.DodecahedronGeometry(5, 0);
+const material = new THREE.MeshPhysicalMaterial({
+  vertexColors: true,
+  roughness: 0.28,
+  metalness: 0.02,
+  transmission: 0.12,
+  thickness: 5,
+  transparent: true,
+  opacity: 0.92,
+  emissive: 0x170912,
+  emissiveIntensity: 0.22,
 });
-world.allowSleep = true;
-world.broadphase = new CANNON.SAPBroadphase(world);
-world.defaultContactMaterial.friction = 0.12;
-world.defaultContactMaterial.restitution = 0.42;
+const mesh = new THREE.InstancedMesh(geometry, material, COUNT);
+mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+scene.add(mesh);
 
-const sphereGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-const sphereMaterial = new THREE.MeshToonMaterial({ color: 0xffffff });
-const spheres = new THREE.InstancedMesh(sphereGeometry, sphereMaterial, COUNT);
-spheres.castShadow = true;
-spheres.receiveShadow = true;
-spheres.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-scene.add(spheres);
+const glowGeometry = new THREE.BufferGeometry();
+const glowPositions = new Float32Array(COUNT * 3);
+const glowColors = new Float32Array(COUNT * 3);
+glowGeometry.setAttribute('position', new THREE.BufferAttribute(glowPositions, 3));
+glowGeometry.setAttribute('color', new THREE.BufferAttribute(glowColors, 3));
+const glow = new THREE.Points(
+  glowGeometry,
+  new THREE.PointsMaterial({
+    size: 2.1,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.66,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }),
+);
+scene.add(glow);
 
-const bodies = [];
-const scales = [];
-const colors = [];
-const rampMeshes = [];
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(stage.clientWidth, stage.clientHeight), 1.05, 0.68, 0.08));
+const fxaa = new ShaderPass(FXAAShader);
+composer.addPass(fxaa);
+composer.addPass(new OutputPass());
 
-function randomRange(min, max) {
-  return min + Math.random() * (max - min);
-}
-
-function randomSpread(range) {
-  return (Math.random() - 0.5) * range;
-}
-
-function setPhase(nextPhase) {
-  phase = nextPhase;
-  startScreen.classList.toggle('is-active', nextPhase === 'start');
-  gameScreen.classList.toggle('is-active', nextPhase === 'playing');
-  endScreen.classList.toggle('is-active', nextPhase === 'end');
-  hud.classList.toggle('is-visible', nextPhase === 'playing');
-}
+const instances = Array.from({ length: COUNT }, () => ({
+  position: new THREE.Vector3(THREE.MathUtils.randFloatSpread(230), THREE.MathUtils.randFloatSpread(230), THREE.MathUtils.randFloatSpread(230)),
+  velocity: new THREE.Vector3(THREE.MathUtils.randFloatSpread(2), THREE.MathUtils.randFloatSpread(2), THREE.MathUtils.randFloatSpread(2)),
+  scale: THREE.MathUtils.randFloat(0.2, 1),
+  attraction: 0.0025 + Math.random() * 0.01,
+  vlimit: 0.3 + Math.random() * 0.2,
+}));
 
 function getAudioContext() {
   if (!audioCtx) {
@@ -210,117 +215,55 @@ function tone(freq, duration, options = {}) {
   } catch {}
 }
 
-function playClick() {
-  tone(520, 0.045, { type: 'square', freqEnd: 390, gain: 0.024 });
-}
-
 function playStart() {
   tone(330, 0.18, { freqEnd: 660, gain: 0.045 });
 }
 
-function playDrop() {
-  tone(180, 0.08, { type: 'triangle', freqEnd: 260, gain: 0.025 });
+function playColor() {
+  [392, 523, 784].forEach((freq, i) => tone(freq, 0.09, { type: 'sine', gain: 0.026, delay: i * 0.04 }));
 }
 
-function playStreamTick() {
-  tone(220, 0.04, { type: 'sine', gain: 0.018 });
+function setPhase(nextPhase) {
+  phase = nextPhase;
+  startScreen.classList.toggle('is-active', nextPhase === 'start');
+  gameScreen.classList.toggle('is-active', nextPhase === 'playing');
+  endScreen.classList.toggle('is-active', nextPhase === 'end');
+  hud.classList.toggle('is-visible', nextPhase === 'playing');
 }
 
-function playColors() {
-  [392, 523, 659].forEach((freq, i) => tone(freq, 0.08, { type: 'sine', gain: 0.028, delay: i * 0.035 }));
+function lerpHexPair(pair, amount) {
+  const a = new THREE.Color(pair[0]);
+  const b = new THREE.Color(pair[1]);
+  return a.lerp(b, amount);
 }
 
-function updateHud() {
-  timeLeft.textContent = String(COUNT);
+function updateColors() {
+  const pair = colorPairs[paletteIndex];
+  for (let i = 0; i < COUNT; i += 1) {
+    const mixed = lerpHexPair(pair, Math.random());
+    mesh.setColorAt(i, mixed);
+    glowColors[i * 3] = mixed.r;
+    glowColors[i * 3 + 1] = mixed.g;
+    glowColors[i * 3 + 2] = mixed.b;
+  }
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  glowGeometry.attributes.color.needsUpdate = true;
   scoreValue.textContent = String(paletteIndex + 1);
-  ringCount.textContent = String(dropBursts);
   maxComboEl.textContent = String(paletteIndex + 1);
 }
 
-function setSphereColor(index, hex) {
-  colors[index] = hex;
-  spheres.setColorAt(index, tempColor.set(hex));
-}
-
-function resetBody(index, high = false) {
-  const body = bodies[index];
-  body.position.set(randomSpread(2), high ? randomRange(5, 7) : randomSpread(5), randomSpread(0.08));
-  body.velocity.set(randomSpread(0.4), high ? randomRange(-0.2, 0.5) : randomSpread(0.3), randomSpread(0.08));
-  body.angularVelocity.set(0, 0, 0);
-  body.quaternion.set(0, 0, 0, 1);
-  body.wakeUp();
-}
-
-function initSpheres() {
-  const palette = paletteSets[paletteIndex];
-  for (let i = 0; i < COUNT; i += 1) {
-    const scale = randomRange(0.2, 1);
-    scales[i] = scale;
-    setSphereColor(i, palette[Math.floor(Math.random() * palette.length)]);
-
-    const shape = new CANNON.Sphere(0.1 * scale);
-    const body = new CANNON.Body({
-      mass: scale * 0.01,
-      shape,
-      linearDamping: 0.08,
-      angularDamping: 0.15,
-      position: new CANNON.Vec3(randomSpread(2), randomSpread(5), 0),
-    });
-    bodies[i] = body;
-    world.addBody(body);
-
-    tempObject.scale.setScalar(scale);
-    tempObject.position.copy(body.position);
-    tempObject.updateMatrix();
-    spheres.setMatrixAt(i, tempObject.matrix);
-  }
-  if (spheres.instanceColor) spheres.instanceColor.needsUpdate = true;
-  spheres.instanceMatrix.needsUpdate = true;
-}
-
-function addRamp(index) {
-  const even = index % 2 === 0;
-  const x = (even ? 1 : -1) * 1;
-  const y = (index - 3.5) * 1.5;
-  const z = 0;
-  const rz = (even ? 1 : -1) * Math.PI / 6;
-
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(3, 0.05, 0.2),
-    new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 18 }),
-  );
-  mesh.position.set(x, y, z);
-  mesh.rotation.z = rz;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-  rampMeshes.push(mesh);
-
-  const body = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(1.5, 0.025, 0.1)) });
-  body.position.set(x, y, z);
-  body.quaternion.setFromEuler(0, 0, rz);
-  world.addBody(body);
-}
-
-function spray(count = 18) {
-  resumeAudio();
-  playDrop();
-  dropBursts += 1;
-  for (let i = 0; i < count; i += 1) {
-    resetBody((dropBursts * count + i) % COUNT, true);
-  }
-  updateHud();
-}
-
 function randomColors() {
-  paletteIndex = (paletteIndex + 1) % paletteSets.length;
-  const palette = paletteSets[paletteIndex];
-  for (let i = 0; i < COUNT; i += 1) {
-    setSphereColor(i, palette[Math.floor(Math.random() * palette.length)]);
-  }
-  spheres.instanceColor.needsUpdate = true;
-  playColors();
-  updateHud();
+  paletteIndex = (paletteIndex + 1) % colorPairs.length;
+  updateColors();
+  playColor();
+}
+
+function projectPointer(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+  raycaster.setFromCamera(pointer, camera);
+  raycaster.ray.intersectPlane(plane, targetGoal);
 }
 
 function startGame() {
@@ -328,77 +271,57 @@ function startGame() {
   playStart();
   setPhase('playing');
   hint.classList.remove('is-hidden');
-  spray(26);
-}
-
-function returnHome() {
-  playClick();
-  setPhase('start');
-}
-
-function pointerDistance(event) {
-  return Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY);
 }
 
 function onPointerDown(event) {
   if (phase !== 'playing') return;
-  pointerDownAt = performance.now();
-  pointerStartX = event.clientX;
-  pointerStartY = event.clientY;
-  window.clearTimeout(longPressTimer);
-  window.clearInterval(streamTimer);
-  longPressTimer = window.setTimeout(() => {
-    if (phase !== 'playing') return;
-    hint.classList.add('is-hidden');
-    spray(10);
-    playStreamTick();
-    streamTimer = window.setInterval(() => {
-      spray(10);
-      playStreamTick();
-    }, 120);
-  }, 420);
+  pointerActive = true;
+  controls.autoRotate = false;
+  projectPointer(event);
+  hint.classList.add('is-hidden');
+  const now = performance.now();
+  if (now - lastTap < 280) randomColors();
+  lastTap = now;
 }
 
-function onPointerUp(event) {
-  if (phase !== 'playing') return;
-  window.clearTimeout(longPressTimer);
-  window.clearInterval(streamTimer);
-  const elapsed = performance.now() - pointerDownAt;
-  if (elapsed < 420 && pointerDistance(event) < 10) {
-    hint.classList.add('is-hidden');
-    spray(18);
-  }
+function onPointerMove(event) {
+  if (phase !== 'playing' || !pointerActive) return;
+  projectPointer(event);
 }
 
-function onPointerCancel() {
-  window.clearTimeout(longPressTimer);
-  window.clearInterval(streamTimer);
+function onPointerUp() {
+  pointerActive = false;
 }
 
-function syncMeshes() {
+function animate() {
+  target.lerp(targetGoal, pointerActive ? 0.16 : 0.035);
+  light.position.copy(target);
+
   for (let i = 0; i < COUNT; i += 1) {
-    const body = bodies[i];
-    if (body.position.y < -7) resetBody(i, true);
-    tempObject.position.copy(body.position);
-    tempObject.quaternion.copy(body.quaternion);
-    tempObject.scale.setScalar(scales[i]);
-    tempObject.updateMatrix();
-    spheres.setMatrixAt(i, tempObject.matrix);
+    const item = instances[i];
+    temp.copy(target).sub(item.position).normalize().multiplyScalar(item.attraction * (pointerActive ? 2.8 : 1));
+    item.velocity.add(temp).clampScalar(-item.vlimit, item.vlimit);
+    item.position.add(item.velocity);
+
+    dummy.position.copy(item.position);
+    dummy.scale.setScalar(item.scale);
+    dummy.lookAt(temp.copy(item.position).add(item.velocity));
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+
+    glowPositions[i * 3] = item.position.x;
+    glowPositions[i * 3 + 1] = item.position.y;
+    glowPositions[i * 3 + 2] = item.position.z;
   }
-  spheres.instanceMatrix.needsUpdate = true;
+  mesh.instanceMatrix.needsUpdate = true;
+  glowGeometry.attributes.position.needsUpdate = true;
 }
 
-function frame(now) {
-  const dt = Math.min(0.033, (now - (frame.last || now)) / 1000 || 1 / 60);
-  frame.last = now;
-  world.step(1 / 60, dt, 3);
-  syncMeshes();
-  rampMeshes.forEach((ramp, i) => {
-    ramp.material.color.setHSL(((paletteIndex * 0.13) + i * 0.04) % 1, 0.36, 0.64);
-  });
+function render() {
+  animate();
   controls.update();
-  renderer.render(scene, camera);
-  requestAnimationFrame(frame);
+  composer.render();
+  requestAnimationFrame(render);
 }
 
 function resize() {
@@ -406,13 +329,21 @@ function resize() {
   const h = stage.clientHeight;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(w, h);
+  composer.setSize(w, h);
+  fxaa.material.uniforms.resolution.value.set(1 / (w * renderer.getPixelRatio()), 1 / (h * renderer.getPixelRatio()));
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 
-for (let i = 0; i < 6; i += 1) addRamp(i + 1);
-initSpheres();
-updateHud();
+timeLeft.textContent = String(COUNT);
+finalScore.textContent = String(COUNT);
+bestScore.textContent = localStorage.getItem(BEST_KEY) || '0';
+ringCount.textContent = String(COUNT);
+resultLabel.textContent = t('complete');
+updateColors();
+setPhase('start');
+resize();
+requestAnimationFrame(render);
 
 startButton.addEventListener('pointerdown', (event) => {
   event.preventDefault();
@@ -420,29 +351,26 @@ startButton.addEventListener('pointerdown', (event) => {
 });
 againButton.addEventListener('pointerdown', (event) => {
   event.preventDefault();
-  spray(32);
+  randomColors();
+  startGame();
 });
 homeButton.addEventListener('pointerdown', (event) => {
   event.preventDefault();
-  returnHome();
+  setPhase('start');
 });
 gameScreen.addEventListener('pointerdown', onPointerDown, { passive: true });
+window.addEventListener('pointermove', onPointerMove, { passive: true });
 window.addEventListener('pointerup', onPointerUp, { passive: true });
-window.addEventListener('pointercancel', onPointerCancel, { passive: true });
+window.addEventListener('pointercancel', onPointerUp, { passive: true });
 window.addEventListener('resize', resize);
 window.addEventListener('keydown', (event) => {
   if (event.code === 'Space') {
     event.preventDefault();
     if (phase === 'start') startGame();
-    else spray(24);
+    else pointerActive = true;
   }
   if (event.code === 'KeyC') randomColors();
 });
-renderer.domElement.addEventListener('dblclick', randomColors);
-
-resultLabel.textContent = t('complete');
-finalScore.textContent = String(COUNT);
-bestScore.textContent = localStorage.getItem(BEST_KEY) || '0';
-setPhase('start');
-resize();
-requestAnimationFrame(frame);
+window.addEventListener('keyup', (event) => {
+  if (event.code === 'Space') pointerActive = false;
+});

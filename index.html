@@ -18,37 +18,37 @@
 
       <header id="hud" class="cs-hud">
         <div>
-          <span data-i18n="time">Time</span>
-          <strong id="timeLeft">45</strong>
+          <span data-i18n="time">Bodies</span>
+          <strong id="timeLeft">2000</strong>
         </div>
         <div>
-          <span data-i18n="score">Score</span>
-          <strong id="scoreValue">0</strong>
+          <span data-i18n="score">Palette</span>
+          <strong id="scoreValue">1</strong>
         </div>
       </header>
 
       <main id="startScreen" class="cs-screen cs-screen--start">
         <section class="cs-card cs-card--start">
-          <p class="cs-kicker" data-i18n="kicker">Touch gravity into light</p>
+          <p class="cs-kicker" data-i18n="kicker">Subsurface swarm</p>
           <h1 data-i18n="title">Crystal Swarm</h1>
-          <p class="cs-copy" data-i18n="startCopy">Drag to orbit. Tap or hold to drop bouncing color spheres.</p>
+          <p class="cs-copy" data-i18n="startCopy">Hold and drag to pull a glowing dodecahedron field through the light.</p>
           <button id="startButton" class="cs-button cs-button--primary" type="button" data-i18n="start">Begin</button>
         </section>
       </main>
 
       <main id="gameScreen" class="cs-screen cs-screen--game">
         <div id="comboBadge" class="cs-combo" aria-hidden="true"></div>
-        <div id="hint" class="cs-hint" data-i18n="hint">Drag orbit · Tap drop · Hold stream</div>
+        <div id="hint" class="cs-hint" data-i18n="hint">Hold to attract · Drag to steer · Tap color</div>
       </main>
 
       <main id="endScreen" class="cs-screen cs-screen--end">
         <section class="cs-card cs-card--end">
-          <p id="resultLabel" class="cs-kicker">Prism complete</p>
+          <p id="resultLabel" class="cs-kicker">Material study</p>
           <h2 id="finalScore">0</h2>
           <div class="cs-stats">
             <div><span data-i18n="best">Best</span><strong id="bestScore">0</strong></div>
-            <div><span data-i18n="rings">Drops</span><strong id="ringCount">0</strong></div>
-            <div><span data-i18n="combo">Combo</span><strong id="maxCombo">1</strong></div>
+            <div><span data-i18n="rings">Bodies</span><strong id="ringCount">0</strong></div>
+            <div><span data-i18n="combo">Palette</span><strong id="maxCombo">1</strong></div>
           </div>
           <div class="cs-actions">
             <button id="againButton" class="cs-button cs-button--primary" type="button" data-i18n="again">Again</button>

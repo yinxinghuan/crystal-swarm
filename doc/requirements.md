@@ -2,51 +2,55 @@
 
 ## 1. Overview
 
-《Crystal Swarm》先回到 TroisJS Physics Demo 1 的 3D 物理技术效果：500 个彩色小球在 Cannon 物理世界中受重力、挡板和地面影响滚落反弹，手机端用点按/长按/拖动来操作。
+《Crystal Swarm》是一款参考 TroisJS Sub Surface Scattering Material demo 的 3D 感官玩具：2000 个发光十二面体在空间中被手指引力牵引，玩家通过拖动光源观察半透明材质、群体运动和 bloom 光晕。
 
 ## 2. Visual Design
 
-- 画面为竖屏全屏 3D 舞台，逻辑视野以 390px × 680px 为设计基准，外层容器圆角 24px。
-- 场景背景使用接近原版的浅色 `#f7f7f3`，不再使用深色科幻水晶风。
-- 主体为 500 个 instanced 球体，半径基准 0.1 world units，实例缩放 0.2 到 1.0，颜色来自 5 色调色盘并可随机切换。
-- 球体材质使用 toon/phong 混合观感：高饱和漫反射、低金属度、明显阴影；每个球体投射阴影。
-- 物理平面尺寸为 15 × 15 world units，位置 z=-0.1，颜色 `#aaaaaa`，接收阴影。
-- 场景有 6 条倾斜挡板，每条尺寸 3 × 0.05 × 0.2 world units，y 位置为 `(i - 3.5) * 1.5`，x 在 -1 和 1 间交替，z 旋转角为 `±Math.PI / 6`。
-- 灯光接近原版：环境光 `#aaaaaa`；两盏聚光灯分别在 `(0,1,2)` 和 `(0,-1,2)`，强度 0.5，角度 `Math.PI / 3`，penumbra 0.5，启用 1024 阴影贴图。
-- 手机端 HUD 只保留轻提示和当前球数/调色盘状态，字号 11px 到 28px，不遮挡中央物理区域。
-- 素材清单：`public/img/aigram.svg` 作为右下角 52px 水印；其余视觉全部由 Three.js 几何、材质、灯光和 Cannon 物理生成。
+- 画面为竖屏全屏 3D 舞台，设计基准 390px × 680px，桌面端容器固定为 390px × 680px，圆角 24px。
+- 背景为深色材质实验室：主色 `#05030f`，底部渐变到 `#101837`，中心叠加 `rgba(255,96,160,0.18)` 径向光。
+- 主体为 2000 个 `DodecahedronGeometry(5, 0)` 实例，随机分布在 x/y/z 均为 -100 到 100 的 200 world units 立方空间。
+- 每个实例缩放为 0.2 到 1.0，材质使用 `MeshPhysicalMaterial`，`roughness=0.18`、`metalness=0.02`、`transmission=0.34`、`thickness=7`、`opacity=0.86`、`emissiveIntensity=0.5`。
+- 颜色使用实例顶点色，默认从 `#dd3e1b` 到 `#0b509c` 随机插值；可循环切换 6 组双色调色盘。
+- 同步渲染 2000 个 additive `Points` 光点，点大小 1.6，透明度 0.42，用来增强晶体边缘辉光。
+- 后处理使用 `EffectComposer`：`RenderPass`、`UnrealBloomPass(strength=0.72, radius=0.55, threshold=0.12)`、`FXAAPass` 和 `OutputPass`。
+- 相机为 45° 透视相机，初始位置 `(0,0,200)`，近远裁剪面 0.1 到 1000，OrbitControls 启用阻尼 0.05，距离限制 95 到 290。
+- 光源为跟随手指目标的 `PointLight(#ffc0c0, intensity=4.2, distance=520)`，并叠加 `AmbientLight(#1d2748, intensity=0.65)`。
+- HUD 顶部显示晶体数量 2000 和当前色盘序号，字号分别为 12px 与 30px；底部提示字号 11px、字距 0.18em，不遮挡中央群体。
+- 素材清单：`public/img/aigram.svg` 作为右下角 52px 水印；其余视觉由 Three.js 几何、材质、灯光和后处理生成。
 
 ## 3. Game Mechanics
 
-- 物理世界重力为 `(0, -9.82, 0)`，固定步长 1/60s，最多补 3 步。
-- 初始生成 500 个球体，位置 x 为 -1 到 1，y 为 -2.5 到 2.5，z 为 0；实例 scale 为 0.2 到 1.0，质量为 `scale * 0.01`。
-- 球体使用 Cannon Sphere body，半径为 `0.1 * scale`，线性阻尼 0.08，角阻尼 0.15。
-- 球体低于 y=-7 时重置到 x=-1 到 1、y=5 到 7、z=0，速度、角速度和旋转清零。
-- 6 条挡板使用 Cannon Box static body，和 Three.js 挡板矩阵保持一致。
-- 点按空白处会把最近 18 个球体重置到屏幕上方形成一阵落球，得分/规则暂不启用。
-- 长按超过 420ms 会连续喷出球体，每 120ms 重置 10 个球体。
-- 点击调色按钮或双指轻点会切换整批球体颜色，颜色组从 6 个固定 5 色调色盘循环。
-- 当前阶段不做胜负，不做关卡，不做排行榜，只验证原版物理技术栈和手机手感。
+- 初始创建 2000 个实例，每个实例包含 position、velocity、scale、attraction、vlimit 五个数值。
+- position 初始值为 `THREE.MathUtils.randFloatSpread(200)`，velocity 初始值为 `randFloatSpread(2)`。
+- attraction 为 `0.0025 + random(0, 0.01)`，vlimit 为 `0.3 + random(0, 0.2)`。
+- 每帧将屏幕触摸点通过 raycaster 投射到 z=0 平面，得到目标点 targetGoal；实际 target 使用 `lerp` 追随，按住时 lerp 系数 0.16，松开时 0.035。
+- 每帧每个实例计算 `target - position` 的归一化方向，乘以 attraction；按住时吸引强度乘以 2.8。
+- velocity 使用 `clampScalar(-vlimit, vlimit)` 限速，position 每帧加 velocity。
+- 每个实例朝 `position + velocity` 方向 lookAt，使十二面体有随运动翻转的方向感。
+- 光点位置与实例位置逐帧同步；实例矩阵与光点 position attribute 每帧标记 `needsUpdate`。
+- 双击或按 C 切换色盘；切换色盘时为 2000 个实例重新随机插值颜色，并同步更新光点颜色。
+- 当前版本不做关卡、碰撞、计时胜负，目标是验证原版 SubSurface/Bloom 技术效果和移动端触控手感。
 
 ## 4. Controls
 
-- 单指拖动：旋转轨道相机，水平拖动控制 yaw，垂直拖动控制 pitch，pitch 限制在 -1.0rad 到 1.0rad。
-- 单指点按：在物理世界上方喷出一阵球体；拖动距离超过 10px 时不触发点按喷球。
-- 长按：持续喷球；松手停止。
-- 双指点按或右上角小按钮：随机/循环切换球体调色盘。
-- 键盘 Space：喷出一阵球体；键盘 C：切换调色盘。
-- 所有游戏动作使用 pointer 事件，不绑定 mouse + touch 双事件。
+- 开始按钮：使用 `pointerdown` 进入场景并解锁 Web Audio。
+- 单指按住：开启引力，隐藏提示文字，停止自动旋转。
+- 单指拖动：更新目标点，让 2000 个晶体被手指牵引。
+- 松手：停止强引力，目标点缓慢回落为普通吸引。
+- 快速双击：间隔小于 280ms 时切换色盘。
+- 拖动空白区域仍由 OrbitControls 接管相机旋转；键盘 Space 开始/按住吸引，键盘 C 切换色盘。
+- 所有游戏动作使用 pointer 事件，不同时绑定 mouse 与 touch。
 
 ## 5. Win / Lose Conditions
 
-- 当前版本没有胜利或失败条件，只保留开始页、物理演示中、结束/返回首页三态中的前两态。
-- 开始页用于说明手机操作；进入后立即展示物理场。
-- 右上角显示已喷出批次数和当前调色盘序号；历史最高、combo 和环数暂不作为目标展示。
+- 当前版本没有胜利或失败条件，只保留开始页、体验中、返回开始页三个状态。
+- 开始页展示一句操作说明和开始按钮；体验中显示 HUD 与底部提示；结束卡仅作为返回/再来一次入口保留。
+- 结算卡显示固定晶体数量 2000、最高记录、本次色盘序号和“材质试验”标签，不作为分数目标。
+- 历史最高使用 `localStorage` 键 `crystal_swarm_best` 读取，当前版本不主动累计分数。
 
 ## 6. Sound Effects
 
-- 开始：sine 波 330Hz → 660Hz 持续 0.18s，音量 0.045。
-- 喷球：triangle 波 180Hz → 260Hz 持续 0.08s，音量 0.025。
-- 长按连续喷球：每 120ms 最多触发一次短 sine 波 220Hz，持续 0.04s，音量 0.018。
-- 换色：三音上升，频率 392Hz、523Hz、659Hz，各 0.08s，间隔 0.035s，音量 0.028。
-- 按钮点击：square 波 520Hz → 390Hz 持续 0.045s，音量 0.024。
+- 开始：sine 波 330Hz 到 660Hz，持续 0.18s，音量 0.045。
+- 换色：三枚 sine 波 392Hz、523Hz、784Hz，各 0.09s，间隔 0.04s，音量 0.026。
+- 音效使用 Web Audio 实时合成，不加载外部音频文件。
+- 浏览器限制音频时静默失败，视觉体验不受影响。
