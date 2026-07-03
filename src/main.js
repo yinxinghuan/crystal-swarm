@@ -126,6 +126,7 @@ controls.autoRotateSpeed = 0.22;
 const light = new THREE.PointLight(0xffc0c0, 9, 620, 1.05);
 light.position.copy(target);
 scene.add(light);
+const hotLight = new THREE.PointLight(0xffffff, 4.5, 170, 1.8);
 scene.add(new THREE.AmbientLight(0xffffff, 1.05));
 const blueFill = new THREE.DirectionalLight(0x7cf6ff, 1.4);
 blueFill.position.set(-1.6, 0.8, 2.2);
@@ -133,6 +134,44 @@ scene.add(blueFill);
 const pinkFill = new THREE.DirectionalLight(0xff74d4, 1.2);
 pinkFill.position.set(1.4, -1.1, 2.4);
 scene.add(pinkFill);
+
+function createRadialTexture(inner, outer) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(64, 64, 2, 64, 64, 64);
+  gradient.addColorStop(0, inner);
+  gradient.addColorStop(0.18, inner);
+  gradient.addColorStop(0.52, outer);
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 128, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+const lightCore = new THREE.Group();
+const coreSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: createRadialTexture('rgba(255,255,255,1)', 'rgba(255,128,210,0.62)'),
+  transparent: true,
+  opacity: 0.95,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+}));
+coreSprite.scale.set(18, 18, 1);
+const haloSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: createRadialTexture('rgba(124,246,255,0.62)', 'rgba(255,116,212,0.28)'),
+  transparent: true,
+  opacity: 0.82,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+}));
+haloSprite.scale.set(58, 58, 1);
+lightCore.add(haloSprite, coreSprite, hotLight);
+lightCore.visible = false;
+scene.add(lightCore);
 
 const geometry = new THREE.DodecahedronGeometry(5, 0);
 const material = new THREE.MeshPhysicalMaterial({
@@ -296,6 +335,15 @@ function onPointerUp() {
 function animate() {
   target.lerp(targetGoal, pointerActive ? 0.16 : 0.035);
   light.position.copy(target);
+  light.intensity = THREE.MathUtils.lerp(light.intensity, pointerActive ? 17 : 8.5, 0.12);
+  light.distance = THREE.MathUtils.lerp(light.distance, pointerActive ? 760 : 560, 0.08);
+  hotLight.intensity = THREE.MathUtils.lerp(hotLight.intensity, pointerActive ? 10 : 3.2, 0.14);
+  lightCore.visible = phase === 'playing';
+  lightCore.position.copy(target);
+  const pulse = 1 + Math.sin(performance.now() * 0.006) * 0.08;
+  const activeScale = pointerActive ? 1.22 : 0.86;
+  coreSprite.scale.setScalar(18 * activeScale * pulse);
+  haloSprite.scale.setScalar(58 * activeScale * pulse);
 
   for (let i = 0; i < COUNT; i += 1) {
     const item = instances[i];

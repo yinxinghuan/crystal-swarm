@@ -26,6 +26,7 @@
 - 群体运动：`instances` 保存 2000 个对象的 position、velocity、scale、attraction、vlimit；每帧朝 target 加速、限速、更新矩阵和光点 attribute。
 - 目标投射：`projectPointer()` 使用 `Raycaster` 和 z=0 `Plane` 把触摸坐标转换为 3D targetGoal；按住时 target lerp 更快，松手后变慢。
 - 材质与后处理：主 mesh 使用 `MeshPhysicalMaterial` 的透明、厚度、传输和自发光参数；额外 Points 提供 additive 光点；Bloom pass 强化边缘辉光。
+- 手指光源：`lightCore` 是一个跟随 target 的 Three.js Group，包含中心 sprite、外层 halo sprite 和近距离白色 point light；`animate()` 根据 `pointerActive` 动态调整 sprite 尺寸、主光强度和距离。
 - 色盘系统：`colorPairs` 保存 6 组双色；`updateColors()` 为 2000 个实例和光点重新插值颜色；双击或 C 键调用 `randomColors()`。
 - 音频：`tone()` 封装 OscillatorNode 和 GainNode；开始与换色各有短音效，音频解锁在用户手势后执行。
 - 多语言：`messages` 提供 zh/en 文案；`detectLocale()` 优先读取 `localStorage.game_locale`，再根据浏览器语言判断。
