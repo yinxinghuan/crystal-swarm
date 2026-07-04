@@ -9,12 +9,6 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 const COUNT = 2000;
-const GAME_DURATION = 45;
-const TARGET_COUNT = 3;
-const TARGET_RADIUS = 28;
-const TARGET_RADIUS_SQ = TARGET_RADIUS * TARGET_RADIUS;
-const TARGET_THRESHOLD = 80;
-const TARGET_HOLD_SECONDS = 1.2;
 const BEST_KEY = 'crystal_swarm_best';
 const colorPairs = [
   ['#dd3e1b', '#0b509c'],
@@ -27,36 +21,36 @@ const colorPairs = [
 
 const messages = {
   en: {
-    time: 'Time',
-    score: 'Score',
+    time: 'Bodies',
+    score: 'Palette',
     kicker: 'Subsurface swarm',
     title: 'Crystal Swarm',
-    startCopy: 'Drag the light and gather the swarm into the glowing rings before time runs out.',
+    startCopy: 'Hold and drag to pull a glowing dodecahedron field through the light.',
     start: 'Begin',
-    hint: 'Gather rings · Double tap color',
+    hint: 'Hold to attract · Drag to steer · Tap color',
     best: 'Best',
-    rings: 'Lit',
-    combo: 'Combo',
+    rings: 'Bodies',
+    combo: 'Palette',
     again: 'Again',
     home: 'Home',
-    complete: 'Light complete',
-    incomplete: 'Time up',
+    complete: 'Material study',
+    incomplete: 'Material study',
   },
   zh: {
-    time: '时间',
-    score: '得分',
+    time: '晶体',
+    score: '色盘',
     kicker: '次表面散射群游',
     title: '水晶群',
-    startCopy: '拖动光源，把晶体群收束进发光光圈，在时间结束前点亮更多目标。',
+    startCopy: '按住并拖动，让发光十二面体群穿过光源。',
     start: '开始',
-    hint: '收束光圈 · 双击换色',
+    hint: '按住吸引 · 拖动引导 · 轻点换色',
     best: '最高',
-    rings: '点亮',
-    combo: '连击',
+    rings: '晶体',
+    combo: '色盘',
     again: '再来一次',
     home: '返回首页',
-    complete: '引光完成',
-    incomplete: '时间到',
+    complete: '材质试验',
+    incomplete: '材质试验',
   },
 };
 
@@ -95,13 +89,6 @@ let phase = 'start';
 let paletteIndex = 0;
 let pointerActive = false;
 let lastTap = 0;
-let score = 0;
-let litCount = 0;
-let combo = 0;
-let maxCombo = 0;
-let remaining = GAME_DURATION;
-let previousFrameTime = performance.now();
-let comboTimer = 0;
 let audioCtx = null;
 
 const target = new THREE.Vector3(0, 0, 0);
@@ -112,7 +99,6 @@ const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const dummy = new THREE.Object3D();
 const temp = new THREE.Vector3();
 const color = new THREE.Color();
-const targetColors = [0x7cf6ff, 0xff74d4, 0xfff4a8];
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -186,35 +172,6 @@ haloSprite.scale.set(36, 36, 1);
 lightCore.add(haloSprite, coreSprite, hotLight);
 lightCore.visible = false;
 scene.add(lightCore);
-
-const targetGroups = Array.from({ length: TARGET_COUNT }, (_, i) => {
-  const group = new THREE.Group();
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(TARGET_RADIUS, 0.9, 8, 96),
-    new THREE.MeshBasicMaterial({
-      color: targetColors[i],
-      transparent: true,
-      opacity: 0.34,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
-  );
-  const fill = new THREE.Mesh(
-    new THREE.CircleGeometry(TARGET_RADIUS * 0.76, 64),
-    new THREE.MeshBasicMaterial({
-      color: targetColors[i],
-      transparent: true,
-      opacity: 0.045,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  group.add(fill, ring);
-  group.visible = false;
-  scene.add(group);
-  return { group, ring, fill, progress: 0, count: 0 };
-});
 
 const geometry = new THREE.DodecahedronGeometry(5, 0);
 const material = new THREE.MeshPhysicalMaterial({
@@ -305,24 +262,12 @@ function playColor() {
   [392, 523, 784].forEach((freq, i) => tone(freq, 0.09, { type: 'sine', gain: 0.026, delay: i * 0.04 }));
 }
 
-function playCapture() {
-  tone(520, 0.16, { type: 'triangle', freqEnd: 880, gain: 0.05 });
-  if (combo > 2) tone(1174, 0.08, { type: 'sine', gain: 0.025, delay: 0.04 });
-}
-
-function playEnd() {
-  tone(220, 0.2, { type: 'sine', freqEnd: 440, gain: 0.04 });
-}
-
 function setPhase(nextPhase) {
   phase = nextPhase;
   startScreen.classList.toggle('is-active', nextPhase === 'start');
   gameScreen.classList.toggle('is-active', nextPhase === 'playing');
   endScreen.classList.toggle('is-active', nextPhase === 'end');
   hud.classList.toggle('is-visible', nextPhase === 'playing');
-  targetGroups.forEach((targetItem) => {
-    targetItem.group.visible = nextPhase === 'playing';
-  });
 }
 
 function lerpHexPair(pair, amount) {
@@ -342,77 +287,14 @@ function updateColors() {
   }
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   glowGeometry.attributes.color.needsUpdate = true;
+  scoreValue.textContent = String(paletteIndex + 1);
+  maxComboEl.textContent = String(paletteIndex + 1);
 }
 
 function randomColors() {
   paletteIndex = (paletteIndex + 1) % colorPairs.length;
   updateColors();
   playColor();
-}
-
-function updateHud() {
-  timeLeft.textContent = String(Math.max(0, Math.ceil(remaining)));
-  scoreValue.textContent = String(score);
-}
-
-function showCombo(text) {
-  comboBadge.textContent = text;
-  comboBadge.classList.add('is-visible');
-  window.clearTimeout(comboTimer);
-  comboTimer = window.setTimeout(() => comboBadge.classList.remove('is-visible'), 720);
-}
-
-function placeTarget(index) {
-  const targetItem = targetGroups[index];
-  let x = 0;
-  let y = 0;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    x = THREE.MathUtils.randFloatSpread(156);
-    y = THREE.MathUtils.randFloatSpread(156);
-    const tooClose = targetGroups.some((other, otherIndex) => {
-      if (otherIndex === index) return false;
-      const dx = other.group.position.x - x;
-      const dy = other.group.position.y - y;
-      return dx * dx + dy * dy < 42 * 42;
-    });
-    if (!tooClose) break;
-  }
-  targetItem.group.position.set(x, y, 0);
-  targetItem.progress = 0;
-  targetItem.count = 0;
-  targetItem.ring.scale.setScalar(1);
-  targetItem.fill.scale.setScalar(1);
-}
-
-function resetTargets() {
-  for (let i = 0; i < TARGET_COUNT; i += 1) placeTarget(i);
-}
-
-function resetGameState() {
-  score = 0;
-  litCount = 0;
-  combo = 0;
-  maxCombo = 0;
-  remaining = GAME_DURATION;
-  previousFrameTime = performance.now();
-  pointerActive = false;
-  comboBadge.classList.remove('is-visible');
-  resetTargets();
-  updateHud();
-}
-
-function endGame() {
-  if (phase !== 'playing') return;
-  pointerActive = false;
-  setPhase('end');
-  playEnd();
-  const best = Math.max(Number(localStorage.getItem(BEST_KEY) || 0), score);
-  localStorage.setItem(BEST_KEY, String(best));
-  finalScore.textContent = String(score);
-  bestScore.textContent = String(best);
-  ringCount.textContent = String(litCount);
-  maxComboEl.textContent = String(maxCombo);
-  resultLabel.textContent = t(score > 0 ? 'complete' : 'incomplete');
 }
 
 function projectPointer(event) {
@@ -425,7 +307,6 @@ function projectPointer(event) {
 
 function startGame() {
   resumeAudio();
-  resetGameState();
   playStart();
   setPhase('playing');
   hint.classList.remove('is-hidden');
@@ -451,36 +332,7 @@ function onPointerUp() {
   pointerActive = false;
 }
 
-function updateTargets(dt, counts) {
-  for (let i = 0; i < TARGET_COUNT; i += 1) {
-    const targetItem = targetGroups[i];
-    targetItem.count = counts[i];
-    if (counts[i] >= TARGET_THRESHOLD) {
-      targetItem.progress = Math.min(TARGET_HOLD_SECONDS, targetItem.progress + dt);
-    } else {
-      targetItem.progress = Math.max(0, targetItem.progress - dt * 0.55);
-    }
-
-    const fillAmount = targetItem.progress / TARGET_HOLD_SECONDS;
-    targetItem.ring.material.opacity = 0.28 + fillAmount * 0.52;
-    targetItem.fill.material.opacity = 0.045 + fillAmount * 0.16;
-    targetItem.ring.scale.setScalar(1 + fillAmount * 0.13);
-    targetItem.fill.scale.setScalar(1 + fillAmount * 0.08);
-
-    if (targetItem.progress >= TARGET_HOLD_SECONDS) {
-      score += 100 + combo * 25;
-      litCount += 1;
-      combo += 1;
-      maxCombo = Math.max(maxCombo, combo);
-      showCombo(`x${combo}`);
-      playCapture();
-      placeTarget(i);
-      updateHud();
-    }
-  }
-}
-
-function animate(dt) {
+function animate() {
   target.lerp(targetGoal, pointerActive ? 0.16 : 0.035);
   light.position.copy(target);
   light.intensity = THREE.MathUtils.lerp(light.intensity, pointerActive ? 12.5 : 8.2, 0.12);
@@ -493,7 +345,6 @@ function animate(dt) {
   coreSprite.scale.setScalar(11 * activeScale * pulse);
   haloSprite.scale.setScalar(36 * activeScale * pulse);
 
-  const captureCounts = [0, 0, 0];
   for (let i = 0; i < COUNT; i += 1) {
     const item = instances[i];
     temp.copy(target).sub(item.position).normalize().multiplyScalar(item.attraction * (pointerActive ? 2.8 : 1));
@@ -509,30 +360,13 @@ function animate(dt) {
     glowPositions[i * 3] = item.position.x;
     glowPositions[i * 3 + 1] = item.position.y;
     glowPositions[i * 3 + 2] = item.position.z;
-
-    for (let targetIndex = 0; targetIndex < TARGET_COUNT; targetIndex += 1) {
-      const targetPosition = targetGroups[targetIndex].group.position;
-      const dx = item.position.x - targetPosition.x;
-      const dy = item.position.y - targetPosition.y;
-      if (dx * dx + dy * dy <= TARGET_RADIUS_SQ) captureCounts[targetIndex] += 1;
-    }
   }
   mesh.instanceMatrix.needsUpdate = true;
   glowGeometry.attributes.position.needsUpdate = true;
-
-  if (phase === 'playing') {
-    remaining -= dt;
-    updateTargets(dt, captureCounts);
-    updateHud();
-    if (remaining <= 0) endGame();
-  }
 }
 
 function render() {
-  const now = performance.now();
-  const dt = Math.min(0.05, (now - previousFrameTime) / 1000);
-  previousFrameTime = now;
-  animate(dt);
+  animate();
   controls.update();
   composer.render();
   requestAnimationFrame(render);
@@ -549,14 +383,12 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 
-timeLeft.textContent = String(GAME_DURATION);
-finalScore.textContent = '0';
+timeLeft.textContent = String(COUNT);
+finalScore.textContent = String(COUNT);
 bestScore.textContent = localStorage.getItem(BEST_KEY) || '0';
-ringCount.textContent = '0';
-maxComboEl.textContent = '0';
+ringCount.textContent = String(COUNT);
 resultLabel.textContent = t('complete');
 updateColors();
-updateHud();
 setPhase('start');
 resize();
 requestAnimationFrame(render);
