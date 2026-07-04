@@ -230,17 +230,25 @@ h2 {
   position: absolute;
   right: 14px;
   top: calc(94px + env(safe-area-inset-top));
-  width: 42px;
-  height: 42px;
+  min-width: 48px;
+  height: 36px;
+  display: grid;
+  place-items: center;
   border: 1px solid rgba(255, 184, 221, 0.25);
-  border-radius: 50%;
+  border-radius: 999px;
   background: rgba(255, 116, 212, 0.32);
+  color: #fff4f9;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   opacity: 0;
   pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
 .cs-combo.is-visible {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .cs-stats {
